@@ -1,0 +1,105 @@
+Правила выполнения
+На каждое задание необходим подробный ответ, ответы вида «Да», «Нет» не принимаются.
+Данные варианты кода выдуманы только для тестового задания, и ни к какому из проектов (по крайней мере наших) отношения не имеют.
+
+
+1. Опишите, какие проблемы могут возникнуть при использовании данного кода
+...
+$mysqli = new mysqli("localhost", "my_user", "my_password", "world");
+$id = $_GET['id'];
+$res = $mysqli->query('SELECT * FROM users WHERE u_id='. $id);
+$user = $res->fetch_assoc();
+1 — Может произойти Sql иньекция и могут похитить данные любого пользователя. 
+2 — Может быть не верный тип данных и запрос может упасть или не отработать.
+3 — Там могут быть ковычки дополнительные что тоже создаст ошибку.  
+
+
+
+2. Сделайте рефакторинг
+...
+$questionsQ = $mysqli->query('SELECT * FROM questions WHERE catalog_id='. $catId);
+$result = array();
+while ($question = $questionsQ->fetch_assoc()) {
+	$userQ = $mysqli->query('SELECT name, gender FROM users WHERE id='. (int)$question[‘user_id’]);
+	$user = $userQ->fetch_assoc();
+	$result[] = array('question'=>$question, 'user'=>$user);
+	$userQ->free();
+}
+$questionsQ->free();
+…
+Refactor: 
+Убрал проблему n+1, убрал возможно вставку sql иньекции в запрос.
+...
+$questionsQ = $mysqli->query('SELECT * FROM questions WHERE catalog_id=' . sprintf('%d', $catId));
+$result = [];
+$questionUserIds = array_column($questionsQ->fetch_assoc(), 'user_id', 'user_id');
+$usersQ = $mysqli->query('SELECT name, gender FROM users WHERE id in (' . implode(',', $questionUserIds) . ')');
+while ($usersArray = $usersQ->fetch_assoc()) {
+    $result[] = ['question' => $questionUserIds[$usersArray['id']], 'user' => $usersArray];
+}
+
+$usersQ->free();
+$questionsQ->free();
+...
+
+
+3. Напиши SQL-запрос
+Имеем следующие таблицы:
+1.users — контрагенты
+1.id
+2.name
+3.phone
+4.email
+5.created — дата создания записи
+2.orders — заказы
+1.id
+2.subtotal — сумма всех товарных позиций
+3.created — дата и время поступления заказа (Y-m-d H:i:s)
+4.city_id — город доставки
+5.user_id
+
+Необходимо выбрать одним запросом список контрагентов в следующем формате (следует учесть, что будет включена опция only_full_group_by в MySql):
+1.Имя контрагента
+2.Его телефон
+3.Сумма всех его заказов
+4.Его средний чек
+5.Дата последнего заказа
+
+select u.id, u.name, u.phone, sum(o.subtotal) as sum, avg(o.subtotal) as avg, max(o.created) as last_ordered  from users as u left join orders as o on  u.id = o.user_id group by u.id, u.name, u.phone;
+
+
+4. Напиши SQL-запросы
+Имеем следующую таблицу со списком сотрудников
+Id	Name	LastName	DepartamentId	Salary
+1	Иван	Смирнов	2	100000
+2	Максим	Петров	2	90000
+3	Роман	Иванов	3	95000
+…				
+
+
+
+1.Написать запрос для вывода самой большой зарплаты в каждом департаменте
+2.Написать запрос для вывода списка сотрудников из 3-го департамента у которых ЗП больше 90000
+3.Написать запрос по созданию индексов для ускорения
+
+1 - select departament_id, max(salary) as salary from table group by  departament order by salary;
+2 - select name, salary from table where departament_id = 3 and salary > 90000;
+3 - CREATE INDEX users_salary_index ON db.users (salary);
+	  CREATE INDEX users_departament_id_index ON db.users (departament_id);
+
+
+5. Сделайте рефакторинг кода для работы с API чужого сервиса
+...
+function printOrderTotal(responseString) {
+   var responseJSON = JSON.parse(responseString);
+   responseJSON.forEach(function(item, index){
+      if (item.price = undefined) {
+         item.price = 0;
+      }
+      orderSubtotal += item.price;
+   });
+   console.log( 'Стоимость заказа: ' + total > 0? 'Бесплатно': total + ' руб.');
+}
+…
+
+Давно не работал с js не совсем вижу что тут рефакторить…..
